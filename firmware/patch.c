@@ -165,9 +165,9 @@ void MidiInMsgHandler(midi_device_t dev, uint8_t port, uint8_t status,
 
 // Thread to load a new patch from within a patch
 
-static const char *index_fn = "0:index.axb";
+static const char *index_fn = "/index.axb";
 
-static char loadFName[16];
+static char loadFName[64];
 static WORKING_AREA(waThreadLoader, 1024);
 static Thread *pThreadLoader;
 static msg_t ThreadLoader(void *arg) {
@@ -214,8 +214,21 @@ static msg_t ThreadLoader(void *arg) {
             bytes_read--;
           }
           if (bytes_read) {
+            e = e - 4;
+            *e++ = '/';
+            *e++ = 'p';
+            *e++ = 'a';
+            *e++ = 't';
+            *e++ = 'c';
+            *e++ = 'h';
+            *e++ = '.';
+            *e++ = 'b';
+            *e++ = 'i';
+            *e++ = 'n';
             *e = 0;
-            sdcard_loadPatch(p);
+            loadFName[0] = '/';
+            strcpy(&loadFName[1],p);
+            sdcard_loadPatch(loadFName);
           }
           goto cont;
         }

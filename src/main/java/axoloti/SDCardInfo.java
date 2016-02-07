@@ -32,6 +32,8 @@ public class SDCardInfo {
     int clustersize = 0;
     int sectorsize = 0;
 
+    boolean busy = false;
+
     private static SDCardInfo instance = null;
 
     protected SDCardInfo() {
@@ -49,6 +51,7 @@ public class SDCardInfo {
         this.clustersize = clustersize;
         this.sectorsize = sectorsize;
         files = new ArrayList<SDFileInfo>();
+        busy = true;
         MainFrame.mainframe.filemanager.refresh();
     }
 
@@ -77,8 +80,16 @@ public class SDCardInfo {
         int TS = (timestamp & 0x001F0000) >> 15;
         Calendar date = Calendar.getInstance();
         date.set(DY, DM - 1, DD, TH, TM, TS);
+        AddFile(fname, size, date);
+    }
+
+    public void AddFile(String fname, int size, Calendar date) {
         if (fname.lastIndexOf(0) > 0) {
             fname = fname.substring(0, fname.lastIndexOf(0));
+        }
+        if (fname.equals("/")) {
+            busy = false;
+            return;
         }
         SDFileInfo sdf = new SDFileInfo(fname, date, size);
         files.add(sdf);
@@ -88,7 +99,8 @@ public class SDCardInfo {
     public void Delete(String fname) {
         SDFileInfo f1 = null;
         for (SDFileInfo f : files) {
-            if (f.filename.equalsIgnoreCase(fname)) {
+            if (f.filename.equalsIgnoreCase(fname)
+                    || f.filename.equalsIgnoreCase(fname + "/")) {
                 f1 = f;
                 break;
             }

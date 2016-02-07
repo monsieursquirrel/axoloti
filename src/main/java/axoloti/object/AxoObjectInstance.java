@@ -43,7 +43,6 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.io.File;
-import java.nio.file.FileSystems;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -91,6 +90,8 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
     public ArrayList<DisplayInstance> displayInstances;
     LabelComponent IndexLabel;
 
+    boolean deferredObjTypeUpdate = false;
+    
     @Override
     public void refreshIndex() {
         if (patch != null) {
@@ -196,6 +197,15 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
             });
             popup.add(popm_adapt);
         }
+
+        MenuItem popm_embed = new MenuItem("embed (convert to patcher/object");
+        popm_embed.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                ConvertToEmbeddedObj();
+            }
+        });
+        popup.add(popm_embed);
 
         /*
          h.add(Box.createHorizontalStrut(3));
@@ -423,11 +433,12 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
         for (InletInstance o : inletInstances) {
             if (n.equals(o.GetLabel())) {
                 return o;
-            } else {
-                String s = Synonyms.instance().inlet(n);
-                if (o.GetLabel().equals(s)) {
-                    return o;
-                }
+            }
+        }
+        for (InletInstance o : inletInstances) {
+            String s = Synonyms.instance().inlet(n);
+            if (o.GetLabel().equals(s)) {
+                return o;
             }
         }
         return null;
@@ -438,11 +449,12 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
         for (OutletInstance o : outletInstances) {
             if (n.equals(o.GetLabel())) {
                 return o;
-            } else {
-                String s = Synonyms.instance().outlet(n);
-                if (o.GetLabel().equals(s)) {
-                    return o;
-                }
+            }
+        }
+        for (OutletInstance o : outletInstances) {
+            String s = Synonyms.instance().outlet(n);
+            if (o.GetLabel().equals(s)) {
+                return o;
             }
         }
         return null;
@@ -470,6 +482,10 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
         super.Unlock();
         for (AttributeInstance a : attributeInstances) {
             a.UnLock();
+        }
+        if (deferredObjTypeUpdate) {
+            getPatch().ChangeObjectInstanceType(this, this.getType());
+            deferredObjTypeUpdate = false;
         }
     }
 
@@ -695,6 +711,8 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
         return s;
     }
 
+    public final static String MidiHandlerFunctionHeader = "void MidiInHandler(midi_device_t dev, uint8_t port, uint8_t status, uint8_t data1, uint8_t data2) {\n";
+    
     @Override
     public String GenerateClass(String ClassName, String OnParentAccess, Boolean enableOnParent) {
         String s = "";
@@ -708,7 +726,7 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
         {
             String d3 = GenerateCodeMidiHandler("");
             if (!d3.isEmpty()) {
-                s += "void MidiInHandler(midi_device_t dev, uint8_t port, uint8_t status, uint8_t data1, uint8_t data2){\n";
+                s += MidiHandlerFunctionHeader;
                 s += d3;
                 s += "}\n";
             }
@@ -845,11 +863,15 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
     public ArrayList<DisplayInstance> GetDisplayInstances() {
         return displayInstances;
     }
-
+    
     @Override
     public void ObjectModified(Object src) {
         if (getPatch() != null) {
-            getPatch().ChangeObjectInstanceType(this, this.getType());
+            if (!getPatch().IsLocked()){
+                getPatch().ChangeObjectInstanceType(this, this.getType());
+            } else {
+                deferredObjTypeUpdate = true;
+            }
         }
     }
 
@@ -863,5 +885,20 @@ public class AxoObjectInstance extends AxoObjectInstanceAbstract implements Obje
             }
         }
         return files;
+    }
+
+    void ConvertToEmbeddedObj() {
+        try {
+            ArrayList<AxoObjectAbstract> ol = MainFrame.mainframe.axoObjects.GetAxoObjectFromName("patch/object",null);
+            if (ol.isEmpty()) return;
+            AxoObjectAbstract o = ol.get(0);
+            AxoObjectInstancePatcherObject oi = (AxoObjectInstancePatcherObject)getPatch().ChangeObjectInstanceType(this, o);
+            oi.ao = getType().clone();            
+            oi.ao.sPath = "";
+            oi.ao.upgradeSha = null;
+            oi.updateObj();
+        } catch (CloneNotSupportedException ex) {
+            Logger.getLogger(AxoObjectInstance.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 }

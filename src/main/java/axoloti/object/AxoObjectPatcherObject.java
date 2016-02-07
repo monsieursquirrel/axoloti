@@ -18,7 +18,11 @@
 package axoloti.object;
 
 import axoloti.Patch;
+import axoloti.inlets.Inlet;
 import java.awt.Point;
+import java.math.BigInteger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -54,5 +58,17 @@ public class AxoObjectPatcherObject extends AxoObject {
         }
         o.PostConstructor();
         return o;
+    }
+
+    @Override
+    public String GenerateSHA() {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA");
+            md.update("object".getBytes());
+            return (new BigInteger(1, md.digest())).toString(16);
+        } catch (NoSuchAlgorithmException ex) {
+            Logger.getLogger(AxoObject.class.getName()).log(Level.SEVERE, null, ex);
+            return null;
+        }
     }
 }

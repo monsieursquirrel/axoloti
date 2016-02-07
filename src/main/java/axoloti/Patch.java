@@ -134,11 +134,11 @@ public class Patch {
         ArrayList<File> files = GetDependendSDFiles();
         for (File f : files) {
             if (!f.exists()) {
-                Logger.getLogger(Patch.class.getName()).log(Level.SEVERE, "File reference unresolved: {}", f.getName());
+                Logger.getLogger(Patch.class.getName()).log(Level.SEVERE, "File reference unresolved: {0}", f.getName());
                 continue;
             }
             if (!f.canRead()) {
-                Logger.getLogger(Patch.class.getName()).log(Level.SEVERE, "Can't read file {}", f.getName());
+                Logger.getLogger(Patch.class.getName()).log(Level.SEVERE, "Can't read file {0}", f.getName());
                 continue;
             }
             if (!SDCardInfo.getInstance().exists(f.getName(), f.lastModified(), f.length())) {
@@ -1281,7 +1281,7 @@ public class Patch {
 
     int IID = -1; // iid identifies the patch
 
-    int GetIID() {
+    public int GetIID() {
         return IID;
     }
 
@@ -2158,11 +2158,11 @@ public class Patch {
         }
     }
 
-    boolean IsLocked() {
+    public boolean IsLocked() {
         return locked;
     }
 
-    public void ChangeObjectInstanceType(AxoObjectInstanceAbstract obj, AxoObjectAbstract objType) {
+    public AxoObjectInstanceAbstract ChangeObjectInstanceType(AxoObjectInstanceAbstract obj, AxoObjectAbstract objType) {
         /*
          if (obj.getType() == objType) {
          return;
@@ -2256,6 +2256,7 @@ public class Patch {
         newObj.setInstanceName(newname);
         newObj.SetSelected(true);
         SetDirty();
+        return newObj;
     }
 
     void invalidate() {
@@ -2351,5 +2352,43 @@ public class Patch {
             }
         }
         return files;
+    }
+
+    public File getBinFile() {
+        String buildDir = System.getProperty(Axoloti.HOME_DIR) + "/build";;
+        return new File(buildDir + "/xpatch.bin");
+//            Logger.getLogger(QCmdWriteFile.class.getName()).log(Level.INFO, "bin path: {0}", f.getAbsolutePath());        
+    }
+
+    public void UploadToSDCard(String sdfilename) {
+        WriteCode();
+        Logger.getLogger(PatchFrame.class.getName()).log(Level.INFO, "sdcard filename:{0}", sdfilename);
+        QCmdProcessor qcmdprocessor = QCmdProcessor.getQCmdProcessor();
+        qcmdprocessor.AppendToQueue(new qcmds.QCmdStop());
+        qcmdprocessor.AppendToQueue(new qcmds.QCmdCompilePatch(this));
+        // create subdirs...
+        
+        for (int i = 1; i < sdfilename.length(); i++) {
+            if (sdfilename.charAt(i) == '/') {
+                qcmdprocessor.AppendToQueue(new qcmds.QCmdCreateDirectory(sdfilename.substring(0, i)));
+                qcmdprocessor.WaitQueueFinished();
+            }
+        }
+        qcmdprocessor.WaitQueueFinished();
+        qcmdprocessor.AppendToQueue(new qcmds.QCmdUploadFile(getBinFile(), sdfilename));
+    }
+
+    public void UploadToSDCard() {
+        String FileNameNoPath = getFileNamePath();
+        String separator = System.getProperty("file.separator");
+        int lastSeparatorIndex = FileNameNoPath.lastIndexOf(separator);
+        if (lastSeparatorIndex > 0) {
+            FileNameNoPath = FileNameNoPath.substring(lastSeparatorIndex + 1);
+        }
+        String FileNameNoExt = FileNameNoPath;
+        if (FileNameNoExt.endsWith(".axp") || FileNameNoExt.endsWith(".axs")) {
+            FileNameNoExt = FileNameNoExt.substring(0, FileNameNoExt.length() - 4);
+        }
+        UploadToSDCard("/" + FileNameNoExt + "/patch.bin");
     }
 }

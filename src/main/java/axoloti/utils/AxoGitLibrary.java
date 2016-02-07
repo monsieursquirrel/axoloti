@@ -23,12 +23,13 @@ import org.eclipse.jgit.errors.NoWorkTreeException;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.submodule.SubmoduleWalk;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 public class AxoGitLibrary extends AxolotiLibrary {
+
+    public static String TYPE = "git";
 
     public AxoGitLibrary(String id, String type, String lloc, boolean e, String rloc, boolean auto) {
         super(id, type, lloc, e, rloc, auto);
@@ -44,13 +45,14 @@ public class AxoGitLibrary extends AxolotiLibrary {
         // get repository
         Git git = null;
         try {
-            FileRepositoryBuilder builder = new FileRepositoryBuilder();
             Repository repository;
             if (usingSubmodule()) {
                 // special case, in developer mode, we have the repos as sub modules, these need to be accessed via the parent repo
                 String relDir = System.getProperty(Axoloti.RELEASE_DIR);
                 Git parent = Git.open(new File(relDir));
-                repository = SubmoduleWalk.getSubmoduleRepository(parent.getRepository(), getId());
+                File ldir = new File(getLocalLocation());
+                String ldirstr = ldir.getName();
+                repository = SubmoduleWalk.getSubmoduleRepository(parent.getRepository(), ldirstr);
                 if (repository == null) {
                     Logger.getLogger(AxoGitLibrary.class.getName()).log(Level.WARNING, "sync repo FAILED cannot find submodule : {0}", getId());
                     return;
@@ -94,6 +96,11 @@ public class AxoGitLibrary extends AxolotiLibrary {
         File ldir = new File(getLocalLocation());
 
         if (!usingSubmodule()) {
+            if (getRemoteLocation() == null || getRemoteLocation().length() == 0) {
+                Logger.getLogger(AxoGitLibrary.class.getName()).log(Level.WARNING, "init FAILED - no remote specified : {0}", getId());
+                return;
+            }
+
             if (delete && ldir.exists()) {
                 try {
                     delete(ldir);
@@ -205,12 +212,13 @@ public class AxoGitLibrary extends AxolotiLibrary {
 
     private boolean add(Git git) {
         AddCommand cmd = git.add();
-        String pre = "";
         if (getContributorPrefix() != null && getContributorPrefix().length() > 0) {
-            pre = getContributorPrefix() + File.separator;
+            cmd.addFilepattern("objects/" + getContributorPrefix());
+            cmd.addFilepattern("patches/" + getContributorPrefix());
+        } else {
+            cmd.addFilepattern(".");
         }
-        cmd.addFilepattern("objects" + File.separator + pre + ".");
-        cmd.addFilepattern("patches" + File.separator + pre + ".");
+        cmd.setUpdate(false);
         try {
             cmd.call();
             return true;
@@ -226,6 +234,7 @@ public class AxoGitLibrary extends AxolotiLibrary {
         CommitCommand cmd = git.commit();
         cmd.setAll(true);
         cmd.setMessage("commit from axoloti UI");
+        cmd.setAllowEmpty(false);
         try {
             RevCommit rev = cmd.call();
             return true;
@@ -265,8 +274,6 @@ public class AxoGitLibrary extends AxolotiLibrary {
             if (status.isClean()) {
                 return false;
             }
-            Logger.getLogger(AxoGitLibrary.class.getName()).log(Level.INFO, "Modifications detected: {0}", getId());
-
             return true;
         } catch (GitAPIException ex) {
             Logger.getLogger(AxoGitLibrary.class.getName()).log(Level.SEVERE, null, ex);
@@ -278,7 +285,9 @@ public class AxoGitLibrary extends AxolotiLibrary {
     }
 
     private boolean usingSubmodule() {
+        // are we in developer mode, and not pointing elsewhere
         return (Axoloti.isDeveloper()
+                && getLocalLocation().startsWith(System.getProperty(Axoloti.RELEASE_DIR))
                 && (getId().equals(AxolotiLibrary.FACTORY_ID) || getId().equals(AxolotiLibrary.USER_LIBRARY_ID)));
     }
 
